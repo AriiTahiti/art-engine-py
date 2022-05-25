@@ -144,7 +144,7 @@ for x in range(1, Total_Generation+1):
 
 
 k = 0
-for new_meta in final_meta[:10]:
+for new_meta in final_meta:
     k += 1
     print(f'{new_meta["name"]}')
 
