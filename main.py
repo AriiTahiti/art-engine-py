@@ -164,8 +164,14 @@ for new_meta in final_meta:
 
     background.save(f'build/images/{k}.png', "PNG")
 
+import json
 
 
+json_string = json.dumps(final_meta)
+
+# Directly from dictionary
+with open('_metadata_to_clean.json', 'w') as outfile:
+    json.dump(json_string, outfile)
 
 ########### Analysis ###########
 
