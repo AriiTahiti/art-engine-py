@@ -6,6 +6,7 @@ from itertools import chain
 import time
 import numpy as np
 import hashlib
+import json
 
 
 def cap_sentence(s):
@@ -55,20 +56,20 @@ for index, row in Total_Appearance.iterrows():
             while verif == 0:
                 n = random.randint(0, nb_grp)
                 to_change = sample.loc[n, 'ATTRIBUTE NAMES']
-                if final_dist[row2.GROUPS]['all_attributes'][to_change] - 1 > 0:
+                if final_dist[row.GROUPS]['all_attributes'][to_change] - 1 > 0:
                     if dif > 0:
-                        final_dist[row2.GROUPS]['all_attributes'][to_change] -= 1
+                        final_dist[row.GROUPS]['all_attributes'][to_change] -= 1
                         new -= 1
                     else :
-                        final_dist[row2.GROUPS]['all_attributes'][to_change] += 1
+                        final_dist[row.GROUPS]['all_attributes'][to_change] += 1
                         new += 1
                     verif += 1
 
-    assert new >= round(Total_Generation * row['% DISTRIBUTION'] / 100)
+    assert new == round(Total_Generation * row['% DISTRIBUTION'] / 100)
     final_dist[row.GROUPS]['all_attributes']['BLANK'] = Total_Generation - new
     final_dist[row.GROUPS]['available_attributes'] = list(data[data['GROUPS'] == row.GROUPS]['ATTRIBUTE NAMES'].unique())
     final_dist[row.GROUPS]['available_attributes'].append('BLANK')
-    assert final_dist[row.GROUPS]['all_attributes']['BLANK'] + new >= Total_Generation
+    assert final_dist[row.GROUPS]['all_attributes']['BLANK'] + new == Total_Generation
 
 final_meta = []
 
@@ -107,6 +108,9 @@ for x in range(1, Total_Generation+1):
             "final_sequence": [
             ],
             "sequence": [
+            ],
+            "all_blanks": [
+
             ]
         }
 
@@ -126,6 +130,10 @@ for x in range(1, Total_Generation+1):
                 file_selected = file.reset_index().iloc[0, 1]
                 meta["sequence"].append({grp_selected: file_selected})
 
+            if selected == 'BLANK':
+                meta["all_blanks"].append({grp_selected: 'BLANK'})
+
+
         encoded = str(meta["attributes"]).encode()
         result = hashlib.sha256(encoded)
 
@@ -136,11 +144,19 @@ for x in range(1, Total_Generation+1):
 
             for var in meta["final_sequence"]:
                 current_dist[list(var.keys())[0]]['all_attributes'][list(var.values())[0]] -= 1
-
+            for var in meta["all_blanks"]:
+                current_dist[list(var.keys())[0]]['all_attributes'][list(var.values())[0]] -= 1
             done = 1
 
         else:
             print("DNA EXISTS")
+
+
+json_string = json.dumps(final_meta)
+
+# Directly from dictionary
+with open('final_collection.json', 'w') as outfile:
+    json.dump(json_string, outfile)
 
 
 k = 0
@@ -164,14 +180,7 @@ for new_meta in final_meta:
 
     background.save(f'build/images/{k}.png', "PNG")
 
-import json
 
-
-json_string = json.dumps(final_meta)
-
-# Directly from dictionary
-with open('_metadata_to_clean.json', 'w') as outfile:
-    json.dump(json_string, outfile)
 
 ########### Analysis ###########
 
