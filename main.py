@@ -7,6 +7,8 @@ import time
 import numpy as np
 import hashlib
 import json
+import os
+import shutil
 
 
 def cap_sentence(s):
@@ -19,6 +21,7 @@ Total_Generation = 4840
 data = pd.read_excel('attributes.xlsx')
 data['GROUPS'] = data['GROUPS'].ffill()
 data = data[data['FILE NAMES'].notnull()]
+
 
 data = data[data['GROUPS'] != 'LEGENDARIES']
 data = data[data['GROUPS'] != '12-EXTRA']
@@ -220,13 +223,12 @@ for x in collection_metadata:
         json.dump(json_string, outfile)
 
 
-
 # add random Special Unit (if collection has it)
 extra = data[data['GROUPS'] == '12-EXTRA']
 
-
 for index_three, row_three in extra.iterrows():
 
+    print(row_three['ATTRIBUTE NAMES'])
     selected = []
 
     rand = random.randint(1, 4041)
@@ -235,9 +237,104 @@ for index_three, row_three in extra.iterrows():
         select_meta = json.loads(f.read())
         fit_meta = json.loads(select_meta)
 
-    print(fit_meta)
+    fit_meta['attributes'].append({"name": "Extra", "value": row_three['ATTRIBUTE NAMES']})
 
-    fit_meta['attributes'].append({"Extrat"})
+    original = Image.open(f"build/images/{rand}.png")
+    to_add = Image.open(f"layers/12-EXTRA/{row_three['FILE NAMES']}")
+    original.paste(to_add, (0, 0), to_add)
 
+    # save collection
+    json_string = json.dumps(fit_meta)
+    with open(f'build/extra_json/{rand}.json', 'w') as outfile:
+        json.dump(json_string, outfile)
+
+    original.save(f'build/extra_images/{rand}.png', "PNG")
+
+
+# Create the legends
+legend = data[data['GROUPS'] == 'LEGENDARIES']
+
+id_start = 4840
+for index_four, row_four in legend.iterrows():
+    id_start += 1
+    meta = {
+        "name": f"JRS #{id_start}",
+        "description": "Generated JRS Collection of 4848 NFTs",
+        "image": "",
+        "dna": "",
+        "attributes": [
+        ]
+    }
+
+    print(meta['name'])
+
+    meta['attributes'].append({"name": "Legendaries", "value": row_four['ATTRIBUTE NAMES']})
+    meta['dna'] = hashlib.sha256(str(meta["attributes"]).encode()).hexdigest()
+
+    # save collection
+    json_string = json.dumps(meta)
+    with open(f'build/json/{id_start}.json', 'w') as outfile:
+        json.dump(json_string, outfile)
+
+    original = Image.open(f"layers/LEGENDARIES/{row_four['FILE NAMES']}")
+    original.save(f'build/images/{id_start}.png', "PNG")
+
+
+# shuffle collection
+
+json_list = os.listdir('build/intermediate_json/')
+image_list = os.listdir('build/intermediate_images/')
+
+# os.remove("build/intermediate_json/.DS_Store")
+
+assert len(json_list) == 4848
+assert len(image_list) == 4848
+
+
+matching = []
+
+current_dist = {}
+for x in range(1, len(json_list)+1):
+    current_dist[str(x)] = 1
+
+all_selected = []
+
+for json_value in json_list:
+    name = re.findall(r'\d+', json_value)[0]
+
+    selected = random.choices(list(current_dist.keys()),
+                              list(current_dist.values()), k=1)[0]
+
+    current_dist[selected] -= 1
+
+    if selected in all_selected:
+        print('inside')
+
+    matching.append((name, selected))
+
+    all_selected.append(selected)
+
+
+for match in matching:
+
+    print(match[0])
+
+    src_path = f'build/intermediate_json/{match[0]}.json'
+    dst_path = f'build/final_json/{match[0]}.json'
+    shutil.move(src_path, dst_path)
+
+    # Absolute path of a file
+    old_name = f'build/final_json/{match[0]}.json'
+    new_name = f'build/final_json/{match[1]}.json'
+    os.rename(old_name, new_name)
+
+    src_path = f'build/intermediate_images/{match[0]}.png'
+    dst_path = f'build/final_images/{match[0]}.png'
+    shutil.move(src_path, dst_path)
+
+    # Absolute path of a file
+    old_name = f'build/final_images/{match[0]}.png'
+    new_name = f'build/final_images/{match[1]}.png'
+    os.rename(old_name, new_name)
 
 
