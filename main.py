@@ -282,10 +282,10 @@ for index_four, row_four in legend.iterrows():
 
 # shuffle collection
 
-json_list = os.listdir('build/intermediate_json/')
-image_list = os.listdir('build/intermediate_images/')
+os.remove("build/images/.DS_Store")
 
-# os.remove("build/intermediate_json/.DS_Store")
+json_list = os.listdir('build/json_fin/')
+image_list = os.listdir('build/images_fin/')
 
 assert len(json_list) == 4848
 assert len(image_list) == 4848
@@ -315,26 +315,38 @@ for json_value in json_list:
     all_selected.append(selected)
 
 
+assert len(matching) == 4848
+
+
+all_old_name = []
+all_new_name = []
+
+
+for x in matching:
+    if x[0] not in all_old_name:
+        all_old_name.append(x[0])
+    if x[1] not in all_new_name:
+        all_new_name.append(x[1])
+
+assert len(all_old_name) == 4848
+assert len(all_new_name) == 4848
+
+
 for match in matching:
 
     print(match[0])
 
-    src_path = f'build/intermediate_json/{match[0]}.json'
-    dst_path = f'build/final_json/{match[0]}.json'
-    shutil.move(src_path, dst_path)
-
-    # Absolute path of a file
-    old_name = f'build/final_json/{match[0]}.json'
-    new_name = f'build/final_json/{match[1]}.json'
+    old_name = f'build/json_fin/{match[0]}.json'
+    new_name = f'build/json_fin/{match[1]}_.json'
     os.rename(old_name, new_name)
 
-    src_path = f'build/intermediate_images/{match[0]}.png'
-    dst_path = f'build/final_images/{match[0]}.png'
-    shutil.move(src_path, dst_path)
+    old_name_2 = f'build/images_fin/{match[0]}.png'
+    new_name_2 = f'build/images_fin/{match[1]}_.png'
+    os.rename(old_name_2, new_name_2)
 
-    # Absolute path of a file
-    old_name = f'build/final_images/{match[0]}.png'
-    new_name = f'build/final_images/{match[1]}.png'
-    os.rename(old_name, new_name)
 
+json_list = os.listdir('build/json_fin/')
+image_list = os.listdir('build/images_fin/')
+
+len(json_list)
 
