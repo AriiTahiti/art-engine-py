@@ -4,33 +4,35 @@ import random
 import re
 from itertools import chain
 import time
-import numpy as np
 import hashlib
 import json
 import os
-import shutil
 
 
+# Function 
 def cap_sentence(s):
   return ''.join((c.upper() if prev == ' ' else c) for c, prev in zip(s, chain(' ', s)))
-pattern = r'[0-9]'
 
+
+pattern = r'[0-9]'
 Total_Generation = 4840
 
-# Prepare the data
+# Read all attributes data
 data = pd.read_excel('attributes.xlsx')
+# Forward Fill the Group Name
 data['GROUPS'] = data['GROUPS'].ffill()
+# Remove the raw where there is no File name
 data = data[data['FILE NAMES'].notnull()]
+# Remove the LEGENDARIES and 12-EXTRA group
+data = data[(data['GROUPS'] != 'LEGENDARIES') & (data['GROUPS'] != '12-EXTRA')]
 
 
-data = data[data['GROUPS'] != 'LEGENDARIES']
-data = data[data['GROUPS'] != '12-EXTRA']
-
-
+# Create the total proportion of Appearance
 Total_Appearance = data[['GROUPS', '% DISTRIBUTION']].groupby('GROUPS').sum()
 Total_Appearance.reset_index(inplace=True)
 Total_Appearance['layer_order'] = Total_Appearance['GROUPS'].str.extract('(^\d*)').astype(int)
 Total_Appearance.sort_values('layer_order', inplace=True)
+Total_Appearance.reset_index(inplace=True, drop=True)
 
 
 def create_distribution_count(df_full: pd.DataFrame, df_grp: pd.DataFrame, total_amt: int) -> dict:
@@ -168,12 +170,6 @@ collection_metadata = create_metadata(
     total_amt=Total_Generation
 )
 
-# save collection
-json_string = json.dumps(collection_metadata)
-with open('final_collection.json', 'w') as outfile:
-    json.dump(json_string, outfile)
-
-
 def generate_collection_art(collection_meta: list):
     k = 0
 
@@ -184,48 +180,51 @@ def generate_collection_art(collection_meta: list):
         background = None
 
         i = 1
-
+        
         for seq in new_meta['sequence']:
-            layer = list(seq.keys())[0]
-            element = list(seq.values())[0]
-            to_add = Image.open(f"layers/{layer}/{element}")
-            if i == 1:
-                background = to_add
-                i = 2
-            else:
-                background.paste(to_add, (0, 0), to_add)
+             layer = list(seq.keys())[0]
+             element = list(seq.values())[0]
+             
+             print(f'LAYER -- {layer} => ELEMEN -- {element}')
 
-        background.save(f'build/images/{k}.png', "PNG")
+        # for seq in new_meta['sequence']:
+        #     layer = list(seq.keys())[0]
+        #     element = list(seq.values())[0]
+        #     to_add = Image.open(f"layers/{layer}/{element}")
+        #     if i == 1:
+        #         background = to_add
+        #         i = 2
+        #     else:
+        #         background.paste(to_add, (0, 0), to_add)
 
-
-generate_collection_art()
-
-# import data
-with open('final_collection.json') as f:
-    metadatas =json.loads(f.read())
-    collection_metadata = json.loads(metadatas)
+        # background.save(f'build/images/{k}.png', "PNG")
 
 
-for x in collection_metadata:
+generate_collection_art(collection_meta = collection_metadata)
 
-    meta_copy = x.copy()
 
-    meta_copy['dna'] = hashlib.sha256(str(meta_copy["attributes"]).encode()).hexdigest()
+def generate_json(collection_meta):
+    for x in collection_meta:
+        
+        meta_copy = x.copy()
 
-    for popping in ["final_sequence", "sequence", "all_blanks", "edition", "date"]:
-        meta_copy.pop(popping)
+        meta_copy['dna'] = hashlib.sha256(str(meta_copy["attributes"]).encode()).hexdigest()
 
-    name = re.findall(r'\d+', meta_copy['name'])[0]
+        for popping in ["final_sequence", "sequence", "all_blanks", "edition", "date"]:
+            meta_copy.pop(popping)
 
-    # save collection
-    json_string = json.dumps(meta_copy)
-    with open(f'build/json/{name}.json', 'w') as outfile:
-        json.dump(json_string, outfile)
+        name = re.findall(r'\d+', meta_copy['name'])[0]
+
+        # save collection
+        json_string = json.dumps(meta_copy)
+        with open(f'build/json/{name}.json', 'w') as outfile:
+            json.dump(json_string, outfile)
+            
+generate_json(collection_meta=collection_metadata)
 
 
 # add random Special Unit (if collection has it)
 extra = data[data['GROUPS'] == '12-EXTRA']
-
 for index_three, row_three in extra.iterrows():
 
     print(row_three['ATTRIBUTE NAMES'])
