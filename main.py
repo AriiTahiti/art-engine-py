@@ -15,7 +15,7 @@ def cap_sentence(s):
 
 
 pattern = r'[0-9]'
-Total_Generation = 4840
+Total_Generation = 4436
 
 # Read all attributes data
 data = pd.read_excel('attributes.xlsx')
@@ -134,7 +134,7 @@ def create_metadata(count_dist: dict, df_full: pd.DataFrame, df_grp: pd.DataFram
                 new_string = cap_sentence(new_string)
 
                 if selected != 'BLANK':
-                    meta["attributes"].append({"name": new_string, "value": selected})
+                    meta["attributes"].append({"name": new_string.upper(), "value": selected})
                     meta["final_sequence"].append({grp_selected: selected})
                     file = df_full[df_full['ATTRIBUTE NAMES'] == selected]['FILE NAMES']
                     file_selected = file.reset_index().iloc[0, 1]
