@@ -1,3 +1,4 @@
 layers
 build
-
+*.xlsx
+*.csv

@@ -7,38 +7,18 @@ import time
 import hashlib
 import json
 import os
+from multiprocessing import Pool
 
-
-# Function 
+# Functions
 def cap_sentence(s):
-  return ''.join((c.upper() if prev == ' ' else c) for c, prev in zip(s, chain(' ', s)))
-
+    return ''.join((c.upper() if prev == ' ' else c) for c, prev in zip(s, chain(' ', s)))
 
 pattern = r'[0-9]'
-Total_Generation = 4436
-
-# Read all attributes data
-data = pd.read_excel('attributes.xlsx')
-# Forward Fill the Group Name
-data['GROUPS'] = data['GROUPS'].ffill()
-# Remove the raw where there is no File name
-data = data[data['FILE NAMES'].notnull()]
-# Remove the LEGENDARIES and 12-EXTRA group
-data = data[(data['GROUPS'] != 'LEGENDARIES') & (data['GROUPS'] != '12-EXTRA')]
-
-
-# Create the total proportion of Appearance
-Total_Appearance = data[['GROUPS', '% DISTRIBUTION']].groupby('GROUPS').sum()
-Total_Appearance.reset_index(inplace=True)
-Total_Appearance['layer_order'] = Total_Appearance['GROUPS'].str.extract('(^\d*)').astype(int)
-Total_Appearance.sort_values('layer_order', inplace=True)
-Total_Appearance.reset_index(inplace=True, drop=True)
-
 
 def create_distribution_count(df_full: pd.DataFrame, df_grp: pd.DataFrame, total_amt: int) -> dict:
     # Final Distribution
     final_dist = {}
-
+    
     for index, row in df_grp.iterrows():
         final_dist[row.GROUPS] = {}
 
@@ -49,15 +29,18 @@ def create_distribution_count(df_full: pd.DataFrame, df_grp: pd.DataFrame, total
         new = 0
 
         final_dist[row.GROUPS]['all_attributes'] = {}
+        
         for index2, row2 in sample.iterrows():
             attribute_prop = round(total_amt * row2['% DISTRIBUTION'] / 100)
             new += attribute_prop
             assert attribute_prop > 0
             final_dist[row2.GROUPS]['all_attributes'][row2['ATTRIBUTE NAMES']] = int(attribute_prop)
-
+        
         if new != round(total_amt * row['% DISTRIBUTION'] / 100):
             dif = new - round(total_amt * row['% DISTRIBUTION'] / 100)
-            number_to_remove = abs(dif)
+            number_to_remove = int(abs(dif))
+            
+            print(f'number_to_remove : {number_to_remove}')
             for x in range(number_to_remove):
                 verif = 0
                 while verif == 0:
@@ -72,24 +55,16 @@ def create_distribution_count(df_full: pd.DataFrame, df_grp: pd.DataFrame, total
                             new += 1
                         verif += 1
 
-        assert new == round(total_amt * row['% DISTRIBUTION'] / 100)
+        assert int(new) == int(round(total_amt * row['% DISTRIBUTION'] / 100))
         final_dist[row.GROUPS]['all_attributes']['BLANK'] = total_amt - new
         final_dist[row.GROUPS]['available_attributes'] = list(df_full[df_full['GROUPS'] == row.GROUPS]['ATTRIBUTE NAMES'].unique())
         final_dist[row.GROUPS]['available_attributes'].append('BLANK')
         assert final_dist[row.GROUPS]['all_attributes']['BLANK'] + new == total_amt
-
-    assert len(list(df_full['FILE NAMES'].unique())) == len(df_full)
-    assert len(list(df_full['ATTRIBUTE NAMES'].unique())) == len(df_full)
+    
+    assert len(list(df_full['FILE NAMES'].unique())) == len(df_full), 'There is no unique file name'
+    assert len(list(df_full['ATTRIBUTE NAMES'].unique())) == len(df_full), 'There is no unique attribute name'
 
     return final_dist
-
-
-distribution = create_distribution_count(
-    df_full=data,
-    df_grp=Total_Appearance,
-    total_amt=Total_Generation
-)
-
 
 def create_metadata(count_dist: dict, df_full: pd.DataFrame, df_grp: pd.DataFrame, total_amt: int) -> list:
 
@@ -107,7 +82,7 @@ def create_metadata(count_dist: dict, df_full: pd.DataFrame, df_grp: pd.DataFram
 
             meta = {
                 "name": f"JRS #{x}",
-                "description": "Generated JRS Collection of 4848 NFTs",
+                "description": f"Generated JRS Collection of {total_amt} NFTs",
                 "image": "",
                 "dna": "",
                 "edition": 1,
@@ -134,7 +109,7 @@ def create_metadata(count_dist: dict, df_full: pd.DataFrame, df_grp: pd.DataFram
                 new_string = cap_sentence(new_string)
 
                 if selected != 'BLANK':
-                    meta["attributes"].append({"name": new_string.upper(), "value": selected})
+                    meta["attributes"].append({"name": new_string.upper(), "value": selected.replace(grp_selected, '')})
                     meta["final_sequence"].append({grp_selected: selected})
                     file = df_full[df_full['ATTRIBUTE NAMES'] == selected]['FILE NAMES']
                     file_selected = file.reset_index().iloc[0, 1]
@@ -162,46 +137,21 @@ def create_metadata(count_dist: dict, df_full: pd.DataFrame, df_grp: pd.DataFram
 
     return final_meta
 
+def generate_collection_art(collection_meta: dict, name_id: int):
+    i = 1
+    for seq in collection_meta['sequence']:
+        layer = list(seq.keys())[0]
+        element = list(seq.values())[0]
+        to_add = Image.open(f"layers/{layer}/{element}")
+        if i == 1:
+            background = to_add
+            i = 2
+        else:
+            background.paste(to_add, (0, 0), to_add)
 
-collection_metadata = create_metadata(
-    count_dist=distribution,
-    df_full=data,
-    df_grp=Total_Appearance,
-    total_amt=Total_Generation
-)
-
-def generate_collection_art(collection_meta: list):
-    k = 0
-
-    for new_meta in collection_meta:
-        k += 1
-        print(f'{new_meta["name"]}')
-
-        background = None
-
-        i = 1
-        
-        for seq in new_meta['sequence']:
-             layer = list(seq.keys())[0]
-             element = list(seq.values())[0]
-             
-             print(f'LAYER -- {layer} => ELEMEN -- {element}')
-
-        # for seq in new_meta['sequence']:
-        #     layer = list(seq.keys())[0]
-        #     element = list(seq.values())[0]
-        #     to_add = Image.open(f"layers/{layer}/{element}")
-        #     if i == 1:
-        #         background = to_add
-        #         i = 2
-        #     else:
-        #         background.paste(to_add, (0, 0), to_add)
-
-        # background.save(f'build/images/{k}.png', "PNG")
-
-
-generate_collection_art(collection_meta = collection_metadata)
-
+    background.save(f'build/images/{name_id}.png', "PNG")
+    
+    return name_id
 
 def generate_json(collection_meta):
     for x in collection_meta:
@@ -220,132 +170,98 @@ def generate_json(collection_meta):
         with open(f'build/json/{name}.json', 'w') as outfile:
             json.dump(json_string, outfile)
             
-generate_json(collection_meta=collection_metadata)
+def execution ():
+    
+    all_files = os.listdir()
+    
+    current_path = os.getcwd()
 
+    
+    print('Checking if build folder exist')
+    if 'build' not in all_files:
+        print('Creating build folder, images folder and json folder')
+        os.mkdir(f'{current_path}/build')
+        os.mkdir(f'{current_path}/build/images')
+        os.mkdir(f'{current_path}/build/json')
+    else :
+        build_files = os.listdir(f'{current_path}/build')
+        print('Checking if images folder in build exist')
+        if 'images' not in build_files:
+            print('Create images folder in build')
+            os.mkdir(f'{current_path}/build/images')
+        print('Checking if images folder in build exist')
+        if 'json' not in build_files:
+            print('Create json folder in build')
+            os.mkdir(f'{current_path}/build/json')
+            
+    print('-- build folder READY --')
+        
+    if 'layers' not in all_files:
+        raise NameError('The layers folder is not in the repository')
+    
+    if 'attributes.xlsx' not in all_files:
+        raise NameError('The File attributes.xlsx is not in the repository')
 
-# add random Special Unit (if collection has it)
-extra = data[data['GROUPS'] == '12-EXTRA']
-for index_three, row_three in extra.iterrows():
+    # Read all attributes data
+    data = pd.read_excel('attributes.xlsx') 
+    
+    for col in data.columns:
+        assert col in ['GROUPS', 'FILE NAMES', 'ATTRIBUTE NAMES', '% DISTRIBUTION'], f'the attributes.xlsx does not contain the column name {col}'
+    
+    # Forward Fill the Group Name
+    data['GROUPS'] = data['GROUPS'].ffill()
+    # Remove the raw where there is no File name
+    data = data[data['FILE NAMES'].notnull()]
+    
+    number_generation = int(input('How many unique generation do you want to have ?'))
+    print(f'We are going to generate {number_generation} images !')
+    
+    #### You can determine directly in the code the list of group to remove or you can create an input
+    
+    # groups_to_remove = input('Enter the name of the groups that you do not want to use seperated with a comma (enter nothing is you need to use all the groups) : ')
+    # groups_to_remove = groups_to_remove.split(",")
+    groups_to_remove = ['14-FEATHER', 'LEGENDARY']
+    
+    for group in groups_to_remove:
+        print(f'removing {group}')
+        data = data[(data['GROUPS'] != group)]
+    
+    data['% DISTRIBUTION'] = data['% DISTRIBUTION'].astype('float')
+    data['ATTRIBUTE NAMES'] = data['ATTRIBUTE NAMES'] + data['GROUPS']
+    
+    Total_Appearance = data[['GROUPS', '% DISTRIBUTION']].groupby('GROUPS').sum()
+    Total_Appearance.reset_index(inplace=True)
+    Total_Appearance['layer_order'] = Total_Appearance['GROUPS'].str.extract('(^\d*)').astype(int)
+    Total_Appearance.sort_values('layer_order', inplace=True)
+    Total_Appearance.reset_index(inplace=True, drop=True)
+    
+    # create distribution
+    distribution = create_distribution_count(
+        df_full=data,
+        df_grp=Total_Appearance,
+        total_amt=number_generation
+    )
+    
+    # create metadata
+    collection_metadata = create_metadata(
+        count_dist=distribution,
+        df_full=data,
+        df_grp=Total_Appearance,
+        total_amt=number_generation
+    )
+        
+    return collection_metadata
 
-    print(row_three['ATTRIBUTE NAMES'])
-    selected = []
+if __name__ == '__main__':
 
-    rand = random.randint(1, 4041)
-
-    with open(f'build/json/{rand}.json') as f:
-        select_meta = json.loads(f.read())
-        fit_meta = json.loads(select_meta)
-
-    fit_meta['attributes'].append({"name": "Extra", "value": row_three['ATTRIBUTE NAMES']})
-
-    original = Image.open(f"build/images/{rand}.png")
-    to_add = Image.open(f"layers/12-EXTRA/{row_three['FILE NAMES']}")
-    original.paste(to_add, (0, 0), to_add)
-
-    # save collection
-    json_string = json.dumps(fit_meta)
-    with open(f'build/extra_json/{rand}.json', 'w') as outfile:
-        json.dump(json_string, outfile)
-
-    original.save(f'build/extra_images/{rand}.png', "PNG")
-
-
-# Create the legends
-legend = data[data['GROUPS'] == 'LEGENDARIES']
-
-id_start = 4840
-for index_four, row_four in legend.iterrows():
-    id_start += 1
-    meta = {
-        "name": f"JRS #{id_start}",
-        "description": "Generated JRS Collection of 4848 NFTs",
-        "image": "",
-        "dna": "",
-        "attributes": [
-        ]
-    }
-
-    print(meta['name'])
-
-    meta['attributes'].append({"name": "Legendaries", "value": row_four['ATTRIBUTE NAMES']})
-    meta['dna'] = hashlib.sha256(str(meta["attributes"]).encode()).hexdigest()
-
-    # save collection
-    json_string = json.dumps(meta)
-    with open(f'build/json/{id_start}.json', 'w') as outfile:
-        json.dump(json_string, outfile)
-
-    original = Image.open(f"layers/LEGENDARIES/{row_four['FILE NAMES']}")
-    original.save(f'build/images/{id_start}.png', "PNG")
-
-
-# shuffle collection
-
-os.remove("build/images/.DS_Store")
-
-json_list = os.listdir('build/json_fin/')
-image_list = os.listdir('build/images_fin/')
-
-assert len(json_list) == 4848
-assert len(image_list) == 4848
-
-
-matching = []
-
-current_dist = {}
-for x in range(1, len(json_list)+1):
-    current_dist[str(x)] = 1
-
-all_selected = []
-
-for json_value in json_list:
-    name = re.findall(r'\d+', json_value)[0]
-
-    selected = random.choices(list(current_dist.keys()),
-                              list(current_dist.values()), k=1)[0]
-
-    current_dist[selected] -= 1
-
-    if selected in all_selected:
-        print('inside')
-
-    matching.append((name, selected))
-
-    all_selected.append(selected)
-
-
-assert len(matching) == 4848
-
-
-all_old_name = []
-all_new_name = []
-
-
-for x in matching:
-    if x[0] not in all_old_name:
-        all_old_name.append(x[0])
-    if x[1] not in all_new_name:
-        all_new_name.append(x[1])
-
-assert len(all_old_name) == 4848
-assert len(all_new_name) == 4848
-
-
-for match in matching:
-
-    print(match[0])
-
-    old_name = f'build/json_fin/{match[0]}.json'
-    new_name = f'build/json_fin/{match[1]}_.json'
-    os.rename(old_name, new_name)
-
-    old_name_2 = f'build/images_fin/{match[0]}.png'
-    new_name_2 = f'build/images_fin/{match[1]}_.png'
-    os.rename(old_name_2, new_name_2)
-
-
-json_list = os.listdir('build/json_fin/')
-image_list = os.listdir('build/images_fin/')
-
-len(json_list)
-
+    # create the process pool
+    with Pool() as pool:
+        
+        meta_datas = execution()
+        items = [(meta_datas[i], i+1) for i in range(len(meta_datas))]  
+        
+        # call the same function with different data in parallel
+        for result in pool.starmap(generate_collection_art, items):
+            print(f'Generation id {result}')
+        
+        generate_json(collection_meta=meta_datas)
