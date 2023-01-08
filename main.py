@@ -8,6 +8,8 @@ import hashlib
 import json
 import os
 from multiprocessing import Pool
+import numpy as np
+
 
 # Functions
 def cap_sentence(s):
@@ -154,6 +156,8 @@ def generate_collection_art(collection_meta: dict, name_id: int):
     return name_id
 
 def generate_json(collection_meta):
+    
+    final_json = []
     for x in collection_meta:
         
         meta_copy = x.copy()
@@ -170,13 +174,65 @@ def generate_json(collection_meta):
         with open(f'build/json/{name}.json', 'w') as outfile:
             json.dump(json_string, outfile)
             
+        final_json.append(meta_copy)
+    
+    return final_json
+
+def get_statistics(meta_datas: list, number_nfts: int, groups_to_remove: list, error_tolerance: float = 0.03):
+    final = pd.DataFrame(meta_datas)
+    for index, row in final.iterrows():
+        all_attributes = row.attributes
+        for attr in all_attributes:
+            final.loc[index, attr['name']] = attr['value']
+            
+    # Read all attributes data
+    data = pd.read_excel('attributes.xlsx') 
+
+    # Forward Fill the Group Name
+    data['GROUPS'] = data['GROUPS'].ffill()
+    # Remove the raw where there is no File name
+    data = data[data['FILE NAMES'].notnull()]
+
+    for group in groups_to_remove:
+        print(f'removing {group}')
+        data = data[(data['GROUPS'] != group)]
+
+    data['% DISTRIBUTION'] = data['% DISTRIBUTION'].astype('float')
+    data['ATTRIBUTE NAMES'] = data['ATTRIBUTE NAMES']
+
+    data['expected_dist'] = data['% DISTRIBUTION'] * number_nfts / 100
+    data['expected_dist'] = data['expected_dist'].astype(int)
+
+    data['upper'] = data['expected_dist'] * (1 + error_tolerance)
+    data['upper'] = data['upper'].astype(int)
+
+    data['lower'] = data['expected_dist'] * (1 - error_tolerance)
+    data['lower'] = data['lower'].astype(int)
+
+    data['real_dist'] = np.nan
+    for index, row in data.iterrows():
+        
+        grp_name = re.sub(pattern, '', row["GROUPS"].lower())
+        grp_name = grp_name.replace('-', '')
+        grp_name = cap_sentence(grp_name)
+        
+        print(f"{row['ATTRIBUTE NAMES']} -- {grp_name.upper()}")
+
+        all_attributes = final[final[grp_name.upper()] == row['ATTRIBUTE NAMES']]
+        
+        data.loc[index, 'real_dist'] = len(all_attributes)
+        
+    data['difference (unit)'] = data['expected_dist'] - data['real_dist']
+    data['difference (%)'] = 1 - data['expected_dist'] / data['real_dist']
+    data.to_excel('./build/analysis.xlsx', index=False)
+
+
 def execution ():
     
     all_files = os.listdir()
     
     current_path = os.getcwd()
 
-    
     print('Checking if build folder exist')
     if 'build' not in all_files:
         print('Creating build folder, images folder and json folder')
@@ -218,13 +274,27 @@ def execution ():
     
     #### You can determine directly in the code the list of group to remove or you can create an input
     
-    # groups_to_remove = input('Enter the name of the groups that you do not want to use seperated with a comma (enter nothing is you need to use all the groups) : ')
-    # groups_to_remove = groups_to_remove.split(",")
-    groups_to_remove = ['14-FEATHER', 'LEGENDARY']
+    groups_to_remove = input('Enter the name of the groups that you do not want to use seperated with a comma (enter nothing is you need to use all the groups) : ')
+    groups_to_remove = groups_to_remove.split(",")
     
     for group in groups_to_remove:
         print(f'removing {group}')
         data = data[(data['GROUPS'] != group)]
+    
+    problems = []
+    
+    for index, row in data.iterrows():
+
+        directory = os.listdir(f'{current_path}/layers/{row["GROUPS"]}')
+        
+        if row["FILE NAMES"] not in directory:
+            problems.append({row["GROUPS"] : (row["FILE NAMES"], row["ATTRIBUTE NAMES"])})
+    
+    if len(problems) > 0:
+        for problem in problems:
+            print(f'Inside Miss Matching')
+            print(problem)
+        raise KeyError('MACTHING PROBLEM IN PATH')
     
     data['% DISTRIBUTION'] = data['% DISTRIBUTION'].astype('float')
     data['ATTRIBUTE NAMES'] = data['ATTRIBUTE NAMES'] + data['GROUPS']
@@ -234,7 +304,7 @@ def execution ():
     Total_Appearance['layer_order'] = Total_Appearance['GROUPS'].str.extract('(^\d*)').astype(int)
     Total_Appearance.sort_values('layer_order', inplace=True)
     Total_Appearance.reset_index(inplace=True, drop=True)
-    
+        
     # create distribution
     distribution = create_distribution_count(
         df_full=data,
@@ -249,19 +319,22 @@ def execution ():
         df_grp=Total_Appearance,
         total_amt=number_generation
     )
-        
-    return collection_metadata
+    
+    items = [(collection_metadata[i], i+1) for i in range(len(collection_metadata))]  
 
-if __name__ == '__main__':
-
-    # create the process pool
     with Pool() as pool:
-        
-        meta_datas = execution()
-        items = [(meta_datas[i], i+1) for i in range(len(meta_datas))]  
-        
         # call the same function with different data in parallel
         for result in pool.starmap(generate_collection_art, items):
             print(f'Generation id {result}')
-        
-        generate_json(collection_meta=meta_datas)
+    
+    final_meta = generate_json(collection_meta=collection_metadata)
+    
+    get_statistics(
+        meta_datas=final_meta,
+        number_nfts=number_generation,
+        groups_to_remove=groups_to_remove,
+    )
+
+
+if __name__ == '__main__':
+    execution()
