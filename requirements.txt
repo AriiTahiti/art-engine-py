@@ -1,3 +1,5 @@
 pillow
 pandas
 openpyxl
+w3storage
+python-decouple
