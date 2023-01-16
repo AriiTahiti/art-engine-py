@@ -3,3 +3,4 @@ build
 *.xlsx
 uploaded
 .env
+waiting
