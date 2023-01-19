@@ -61,4 +61,3 @@ def upload_selected_art():
 
 upload_selected_art()
 
-

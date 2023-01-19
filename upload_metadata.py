@@ -28,11 +28,10 @@ def pinata_upload(directory):
     response = Session().send(built_request).json()
 
     print(response)
-    
     print(f"New Token URI is {response['IpfsHash']}")
 
 
 current_location = getcwd()
 
-pinata_upload(f'{current_location}/waiting')
+pinata_upload(f'{current_location}/shuffled_fixed')
 
